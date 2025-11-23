@@ -1,0 +1,82 @@
+package com.example.sensorcollector.data
+
+import android.content.Context
+import com.example.sensorcollector.sensor.SensorRecording
+import com.example.sensorcollector.utils.DateTimeFormatter
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileWriter
+
+class FileManager(private val context: Context) {
+    // Tạo Gson instance một lần để tái sử dụng (tránh tạo mới mỗi lần)
+    private val gson: Gson = GsonBuilder()
+        .setPrettyPrinting()
+        .create()
+    private val baseDir: File = File(context.getExternalFilesDir(null), "sensor_data")
+    
+    init {
+        if (!baseDir.exists()) {
+            baseDir.mkdirs()
+        }
+    }
+    
+    /**
+     * Lưu recording vào file JSON.
+     * Chỉ được gọi một lần duy nhất sau khi recording dừng.
+     * Tất cả dữ liệu đã được thu thập và lưu trong memory trước đó.
+     */
+    suspend fun saveRecording(recording: SensorRecording): File? {
+        return withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val typeDir = File(baseDir, recording.type)
+            if (!typeDir.exists()) {
+                typeDir.mkdirs()
+            }
+            
+            val fileName = DateTimeFormatter.generateFileName("sensors", typeDir)
+            val file = File(typeDir, fileName)
+            
+            try {
+                // Serialize JSON và ghi file trong background thread
+                FileWriter(file).use { writer ->
+                    gson.toJson(recording, writer)
+                }
+                file
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+    }
+    
+    fun getTypeDirectories(): Map<String, File> {
+        val types = mutableMapOf<String, File>()
+        if (baseDir.exists() && baseDir.isDirectory) {
+            baseDir.listFiles()?.forEach { file ->
+                if (file.isDirectory && file.listFiles()?.any { it.name.endsWith(".json") } == true) {
+                    types[file.name] = file
+                }
+            }
+        }
+        return types
+    }
+    
+    fun deleteAllRecordings(): Boolean {
+        return try {
+            if (baseDir.exists()) {
+                baseDir.deleteRecursively()
+                baseDir.mkdirs()
+                true
+            } else {
+                true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+}
+
+

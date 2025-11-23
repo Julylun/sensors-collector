@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sensor Collector</string>
+    <string name="record">Ghi</string>
+    <string name="stop">Dừng</string>
+    <string name="save">Lưu</string>
+    <string name="delete">Xóa</string>
+    <string name="cancel">Hủy</string>
+    <string name="accelerometer">Accelerometer</string>
+    <string name="gyroscope">Gyroscope</string>
+    <string name="ambient_light">Ambient Light</string>
+    <string name="proximity">Proximity</string>
+    <string name="recording_time">Thời gian ghi (giây)</string>
+    <string name="delay_before_recording">Delay trước khi ghi (giây)</string>
+    <string name="sampling_interval">Khoảng thời gian lấy mẫu (ms)</string>
+    <string name="preparing">Chuẩn bị: %1$d giây</string>
+    <string name="recording">Đang ghi: %1$d giây</string>
+    <string name="sampling_continuous">Liên tục</string>
+    <string name="type">Loại</string>
+    <string name="countdown">Còn lại: %1$d giây</string>
+    <string name="delete_confirm">Bạn có chắc chắn muốn xóa tất cả dữ liệu đã lưu?</string>
+    <string name="yes">Có</string>
+    <string name="no">Không</string>
+    <string name="none">None</string>
+    <string name="sensor_values">Giá trị cảm biến</string>
+</resources>
+
+
