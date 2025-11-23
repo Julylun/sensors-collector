@@ -23,6 +23,7 @@
     <string name="no">Không</string>
     <string name="none">None</string>
     <string name="sensor_values">Giá trị cảm biến</string>
+    <string name="beep_enabled">Bật tiếng beep sau delay</string>
 </resources>
 
 

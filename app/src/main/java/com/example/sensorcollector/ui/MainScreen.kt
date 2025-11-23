@@ -29,6 +29,7 @@ fun MainScreen(
     val delayCountdown by viewModel.delayCountdown.collectAsState()
     val recordingTime by viewModel.recordingTime.collectAsState()
     val delayBeforeRecording by viewModel.delayBeforeRecording.collectAsState()
+    val beepEnabled by viewModel.beepEnabled.collectAsState()
     val samplingInterval by viewModel.samplingInterval.collectAsState()
     val selectedType by viewModel.selectedType.collectAsState()
     val accelerometerEnabled by viewModel.accelerometerEnabled.collectAsState()
@@ -145,6 +146,23 @@ fun MainScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isRecording && delayCountdown == null
             )
+            
+            // Beep Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = beepEnabled,
+                    onCheckedChange = { viewModel.setBeepEnabled(it) },
+                    enabled = !isRecording && delayCountdown == null
+                )
+                Text(
+                    text = "Bật tiếng beep sau delay",
+                    modifier = Modifier.padding(start = 8.dp),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
             
             // Recording Time Input
             OutlinedTextField(

@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sensorcollector.data.SensorRepository
 import com.example.sensorcollector.sensor.SensorManager
+import com.example.sensorcollector.utils.BeepHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +38,9 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     
     private val _delayCountdown = MutableStateFlow<Int?>(null)
     val delayCountdown: StateFlow<Int?> = _delayCountdown.asStateFlow()
+    
+    private val _beepEnabled = MutableStateFlow(prefs.getBoolean("beep_enabled", true))
+    val beepEnabled: StateFlow<Boolean> = _beepEnabled.asStateFlow()
     
     private val _selectedType = MutableStateFlow("walk")
     val selectedType: StateFlow<String> = _selectedType.asStateFlow()
@@ -81,6 +85,11 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     fun setDelayBeforeRecording(delay: Int) {
         _delayBeforeRecording.value = delay
         prefs.edit().putInt("delay_before_recording", delay).apply()
+    }
+    
+    fun setBeepEnabled(enabled: Boolean) {
+        _beepEnabled.value = enabled
+        prefs.edit().putBoolean("beep_enabled", enabled).apply()
     }
     
     fun setSamplingInterval(intervalMs: Long) {
@@ -130,8 +139,13 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
                 _delayCountdown.value = delayRemaining
             }
             
-            // Sau khi hết delay, bắt đầu recording
+            // Sau khi hết delay, phát beep nếu được bật
             _delayCountdown.value = null
+            if (_beepEnabled.value) {
+                BeepHelper.playBeep()
+            }
+            
+            // Bắt đầu recording
             _isRecording.value = true
             sensorManager.setSamplingInterval(_samplingInterval.value)
             sensorManager.startRecording()
