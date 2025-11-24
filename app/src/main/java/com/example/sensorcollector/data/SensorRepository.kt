@@ -20,6 +20,14 @@ class SensorRepository(private val context: Context) {
         return fileManager.getTypeDirectories()
     }
     
+    fun getRecordingFiles(): List<File> {
+        return fileManager.getRecordingFiles()
+    }
+    
+    fun deleteFiles(paths: List<String>): Boolean {
+        return fileManager.deleteFiles(paths)
+    }
+    
     fun deleteAllRecordings(): Boolean {
         return fileManager.deleteAllRecordings()
     }

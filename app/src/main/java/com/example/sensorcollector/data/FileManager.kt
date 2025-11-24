@@ -63,6 +63,57 @@ class FileManager(private val context: Context) {
         return types
     }
     
+    fun getRecordingFiles(): List<File> {
+        if (!baseDir.exists() || !baseDir.isDirectory) return emptyList()
+        val files = mutableListOf<File>()
+        baseDir.listFiles()?.forEach { dir ->
+            if (dir.isDirectory) {
+                dir.listFiles()?.filter { it.isFile && it.name.endsWith(".json") }?.let { files.addAll(it) }
+            }
+        }
+        return files.sortedByDescending { it.lastModified() }
+    }
+    
+    fun deleteFiles(paths: List<String>): Boolean {
+        if (paths.isEmpty()) return true
+        var success = true
+        val baseCanonical = try {
+            baseDir.canonicalPath
+        } catch (e: Exception) {
+            baseDir.absolutePath
+        }
+        
+        paths.forEach { path ->
+            try {
+                val file = File(path)
+                if (!file.exists()) return@forEach
+                val canonical = try {
+                    file.canonicalPath
+                } catch (e: Exception) {
+                    success = false
+                    return@forEach
+                }
+                if (!canonical.startsWith(baseCanonical)) {
+                    return@forEach
+                }
+                if (!file.delete()) {
+                    success = false
+                }
+                val parent = file.parentFile
+                if (parent != null && parent.isDirectory) {
+                    val remaining = parent.listFiles()
+                    if (remaining == null || remaining.isEmpty()) {
+                        parent.delete()
+                    }
+                }
+            } catch (e: Exception) {
+                success = false
+                e.printStackTrace()
+            }
+        }
+        return success
+    }
+    
     fun deleteAllRecordings(): Boolean {
         return try {
             if (baseDir.exists()) {

@@ -8,12 +8,22 @@ import androidx.lifecycle.viewModelScope
 import com.example.sensorcollector.data.SensorRepository
 import com.example.sensorcollector.sensor.SensorManager
 import com.example.sensorcollector.utils.BeepHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+data class RecordingFileInfo(
+    val path: String,
+    val name: String,
+    val type: String,
+    val sizeBytes: Long,
+    val lastModified: Long
+)
 
 class SensorViewModel(application: Application) : AndroidViewModel(application) {
     private val context: Context = application.applicationContext
@@ -42,6 +52,9 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     private val _beepEnabled = MutableStateFlow(prefs.getBoolean("beep_enabled", true))
     val beepEnabled: StateFlow<Boolean> = _beepEnabled.asStateFlow()
     
+    private val _loopRecordingEnabled = MutableStateFlow(prefs.getBoolean("loop_enabled", false))
+    val loopRecordingEnabled: StateFlow<Boolean> = _loopRecordingEnabled.asStateFlow()
+    
     private val _selectedType = MutableStateFlow("walk")
     val selectedType: StateFlow<String> = _selectedType.asStateFlow()
     
@@ -56,6 +69,9 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     
     private val _proximityEnabled = MutableStateFlow(false)
     val proximityEnabled: StateFlow<Boolean> = _proximityEnabled.asStateFlow()
+    
+    private val _recordingFiles = MutableStateFlow<List<RecordingFileInfo>>(emptyList())
+    val recordingFiles: StateFlow<List<RecordingFileInfo>> = _recordingFiles.asStateFlow()
     
     val accelerometerValue = sensorManager.accelerometerValue
     val gyroscopeValue = sensorManager.gyroscopeValue
@@ -75,6 +91,8 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
         sensorManager.setGyroscopeEnabled(_gyroscopeEnabled.value)
         sensorManager.setAmbientLightEnabled(_ambientLightEnabled.value)
         sensorManager.setProximityEnabled(_proximityEnabled.value)
+        
+        refreshRecordingFiles()
     }
     
     fun setRecordingTime(time: Int) {
@@ -90,6 +108,11 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     fun setBeepEnabled(enabled: Boolean) {
         _beepEnabled.value = enabled
         prefs.edit().putBoolean("beep_enabled", enabled).apply()
+    }
+    
+    fun setLoopRecordingEnabled(enabled: Boolean) {
+        _loopRecordingEnabled.value = enabled
+        prefs.edit().putBoolean("loop_enabled", enabled).apply()
     }
     
     fun setSamplingInterval(intervalMs: Long) {
@@ -171,8 +194,13 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     private val _lastRecording = MutableStateFlow<com.example.sensorcollector.sensor.SensorRecording?>(null)
     val lastRecording: StateFlow<com.example.sensorcollector.sensor.SensorRecording?> = _lastRecording.asStateFlow()
     
-    fun stopRecording() {
+    fun stopRecording(manualStop: Boolean = false) {
         if (!_isRecording.value && _delayCountdown.value == null) return
+        
+        val wasRecording = _isRecording.value
+        val remainingCountdown = _countdown.value ?: 0
+        val shouldSkipSaving = manualStop && _loopRecordingEnabled.value && wasRecording && remainingCountdown > 0
+        val shouldRestartLoop = _loopRecordingEnabled.value && !manualStop
         
         _isRecording.value = false
         _delayCountdown.value = null
@@ -180,26 +208,77 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
         countdownJob = null
         sensorManager.stopRecording()
         
-        // Lấy dữ liệu từ memory (chỉ là list, chưa serialize JSON)
-        val recording = sensorManager.getRecordingData(_selectedType.value, _recordingTime.value)
+        if (wasRecording && _beepEnabled.value) {
+            BeepHelper.playBeep()
+        }
         
-        // Lưu recording để hiển thị
-        _lastRecording.value = recording
+        val recording = if (wasRecording && !shouldSkipSaving) {
+            val data = sensorManager.getRecordingData(_selectedType.value, _recordingTime.value)
+            _lastRecording.value = data
+            data
+        } else {
+            null
+        }
         
-        // Ghi file trong background thread để không block UI/sensor collection
-        viewModelScope.launch {
-            // Serialize và ghi file chỉ một lần duy nhất sau khi recording dừng
-            repository.saveRecording(recording)
+        if (recording != null) {
+            viewModelScope.launch {
+                repository.saveRecording(recording)
+                sensorManager.clearData()
+                refreshRecordingFiles()
+            }
+        } else {
             sensorManager.clearData()
         }
         
         _countdown.value = null
+        
+        if (shouldRestartLoop && wasRecording) {
+            startRecording()
+        }
+    }
+    
+    private suspend fun loadRecordingFiles(): List<RecordingFileInfo> {
+        return repository.getRecordingFiles().map { file ->
+            RecordingFileInfo(
+                path = file.absolutePath,
+                name = file.name,
+                type = file.parentFile?.name ?: "unknown",
+                sizeBytes = file.length(),
+                lastModified = file.lastModified()
+            )
+        }.sortedByDescending { it.lastModified }
+    }
+    
+    fun refreshRecordingFiles() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val files = loadRecordingFiles()
+            withContext(Dispatchers.Main) {
+                _recordingFiles.value = files
+            }
+        }
+    }
+    
+    fun deleteSelectedFiles(paths: List<String>, onResult: (Boolean) -> Unit = {}) {
+        if (paths.isEmpty()) {
+            onResult(true)
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = repository.deleteFiles(paths)
+            val files = loadRecordingFiles()
+            withContext(Dispatchers.Main) {
+                _recordingFiles.value = files
+                onResult(result)
+            }
+        }
     }
     
     fun getTypeDirectories() = repository.getTypeDirectories()
     
     fun deleteAllRecordings(): Boolean {
-        return repository.deleteAllRecordings()
+        val result = repository.deleteAllRecordings()
+        refreshRecordingFiles()
+        return result
     }
 }
 

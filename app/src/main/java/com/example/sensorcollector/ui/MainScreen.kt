@@ -30,7 +30,9 @@ fun MainScreen(
     val recordingTime by viewModel.recordingTime.collectAsState()
     val delayBeforeRecording by viewModel.delayBeforeRecording.collectAsState()
     val beepEnabled by viewModel.beepEnabled.collectAsState()
+    val loopRecordingEnabled by viewModel.loopRecordingEnabled.collectAsState()
     val samplingInterval by viewModel.samplingInterval.collectAsState()
+    val recordingFiles by viewModel.recordingFiles.collectAsState()
     val selectedType by viewModel.selectedType.collectAsState()
     val accelerometerEnabled by viewModel.accelerometerEnabled.collectAsState()
     val gyroscopeEnabled by viewModel.gyroscopeEnabled.collectAsState()
@@ -45,11 +47,16 @@ fun MainScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showJsonDialog by remember { mutableStateOf(false) }
+    var showFileDeleteDialog by remember { mutableStateOf(false) }
     var recordingTimeInput by remember { mutableStateOf(recordingTime.toString()) }
     var delayBeforeRecordingInput by remember { mutableStateOf(delayBeforeRecording.toString()) }
     var samplingIntervalInput by remember { mutableStateOf(samplingInterval.toString()) }
     
     val lastRecording by viewModel.lastRecording.collectAsState()
+
+    val controlsLocked = isRecording || delayCountdown != null
+    val interactionsEnabled = !controlsLocked
+    val requireHoldToStop = loopRecordingEnabled && (isRecording || delayCountdown != null)
     
     val types = listOf("fall", "jump", "walk", "running", "idle", "shake", "other")
     val samplingIntervals = listOf(0L, 20L, 50L, 100L, 200L, 500L) // 0 = continuous
@@ -64,6 +71,21 @@ fun MainScreen(
     
     LaunchedEffect(samplingInterval) {
         samplingIntervalInput = samplingInterval.toString()
+    }
+
+    LaunchedEffect(controlsLocked) {
+        if (controlsLocked) {
+            showSaveDialog = false
+            showDeleteDialog = false
+            showJsonDialog = false
+            showFileDeleteDialog = false
+        }
+    }
+
+    LaunchedEffect(recordingFiles) {
+        if (recordingFiles.isEmpty()) {
+            showFileDeleteDialog = false
+        }
     }
     
     Scaffold(
@@ -84,9 +106,15 @@ fun MainScreen(
             // Record/Stop Button
             RecordButton(
                 isRecording = isRecording || delayCountdown != null,
+                requireHoldToStop = requireHoldToStop,
+                onHoldToStop = if (requireHoldToStop) {
+                    { viewModel.stopRecording(manualStop = true) }
+                } else null,
                 onClick = {
                     if (isRecording || delayCountdown != null) {
-                        viewModel.stopRecording()
+                        if (!loopRecordingEnabled) {
+                            viewModel.stopRecording(manualStop = true)
+                        }
                     } else {
                         val time = recordingTimeInput.toIntOrNull() ?: 30
                         viewModel.setRecordingTime(time)
@@ -95,6 +123,14 @@ fun MainScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
+            
+            if (requireHoldToStop) {
+                Text(
+                    text = "Loop đang bật - giữ nút Dừng 3 giây để kết thúc.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             
             // Delay Countdown Display
             if (delayCountdown != null) {
@@ -144,7 +180,7 @@ fun MainScreen(
                 },
                 label = { Text("Delay trước khi ghi (giây)") },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isRecording && delayCountdown == null
+                enabled = interactionsEnabled
             )
             
             // Beep Toggle
@@ -155,13 +191,36 @@ fun MainScreen(
                 Checkbox(
                     checked = beepEnabled,
                     onCheckedChange = { viewModel.setBeepEnabled(it) },
-                    enabled = !isRecording && delayCountdown == null
+                    enabled = interactionsEnabled
                 )
                 Text(
                     text = "Bật tiếng beep sau delay",
                     modifier = Modifier.padding(start = 8.dp),
                     style = MaterialTheme.typography.bodyLarge
                 )
+            }
+            
+            // Loop Recording Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = loopRecordingEnabled,
+                    onCheckedChange = { viewModel.setLoopRecordingEnabled(it) },
+                    enabled = interactionsEnabled
+                )
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text(
+                        text = "Loop ghi vô hạn",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "Tự động ghi tiếp, giữ nút Dừng 3 giây để thoát",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             
             // Recording Time Input
@@ -174,14 +233,17 @@ fun MainScreen(
                 },
                 label = { Text("Thời gian ghi (giây)") },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isRecording && delayCountdown == null
+                enabled = interactionsEnabled
             )
             
             // Sampling Interval Selection
             var samplingExpanded by remember { mutableStateOf(false) }
+            LaunchedEffect(controlsLocked) {
+                if (controlsLocked) samplingExpanded = false
+            }
             ExposedDropdownMenuBox(
                 expanded = samplingExpanded,
-                onExpandedChange = { samplingExpanded = !samplingExpanded },
+                onExpandedChange = { if (interactionsEnabled) samplingExpanded = !samplingExpanded },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedTextField(
@@ -193,7 +255,7 @@ fun MainScreen(
                     modifier = Modifier
                         .menuAnchor()
                         .fillMaxWidth(),
-                    enabled = !isRecording
+                    enabled = interactionsEnabled
                 )
                 ExposedDropdownMenu(
                     expanded = samplingExpanded,
@@ -202,9 +264,12 @@ fun MainScreen(
                     samplingIntervals.forEach { interval ->
                         DropdownMenuItem(
                             text = { Text(if (interval == 0L) "Liên tục" else "${interval}ms") },
+                            enabled = interactionsEnabled,
                             onClick = {
-                                viewModel.setSamplingInterval(interval)
-                                samplingExpanded = false
+                                if (interactionsEnabled) {
+                                    viewModel.setSamplingInterval(interval)
+                                    samplingExpanded = false
+                                }
                             }
                         )
                     }
@@ -225,15 +290,18 @@ fun MainScreen(
                 },
                 label = { Text("Tùy chỉnh (ms, 0 = liên tục)") },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isRecording,
+                enabled = interactionsEnabled,
                 placeholder = { Text("Nhập số ms hoặc 0 cho liên tục") }
             )
             
             // Type Selection
             var expanded by remember { mutableStateOf(false) }
+            LaunchedEffect(controlsLocked) {
+                if (controlsLocked) expanded = false
+            }
             ExposedDropdownMenuBox(
                 expanded = expanded,
-                onExpandedChange = { expanded = !expanded },
+                onExpandedChange = { if (interactionsEnabled) expanded = !expanded },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedTextField(
@@ -244,7 +312,8 @@ fun MainScreen(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     modifier = Modifier
                         .menuAnchor()
-                        .fillMaxWidth()
+                        .fillMaxWidth(),
+                    enabled = interactionsEnabled
                 )
                 ExposedDropdownMenu(
                     expanded = expanded,
@@ -253,9 +322,12 @@ fun MainScreen(
                     types.forEach { type ->
                         DropdownMenuItem(
                             text = { Text(type) },
+                            enabled = interactionsEnabled,
                             onClick = {
-                                viewModel.setSelectedType(type)
-                                expanded = false
+                                if (interactionsEnabled) {
+                                    viewModel.setSelectedType(type)
+                                    expanded = false
+                                }
                             }
                         )
                     }
@@ -273,28 +345,28 @@ fun MainScreen(
             SensorToggle(
                 label = "Accelerometer",
                 enabled = accelerometerEnabled,
-                available = viewModel.isAccelerometerAvailable,
+                available = viewModel.isAccelerometerAvailable && interactionsEnabled,
                 onCheckedChange = { viewModel.setAccelerometerEnabled(it) }
             )
             
             SensorToggle(
                 label = "Gyroscope",
                 enabled = gyroscopeEnabled,
-                available = viewModel.isGyroscopeAvailable,
+                available = viewModel.isGyroscopeAvailable && interactionsEnabled,
                 onCheckedChange = { viewModel.setGyroscopeEnabled(it) }
             )
             
             SensorToggle(
                 label = "Ambient Light",
                 enabled = ambientLightEnabled,
-                available = viewModel.isAmbientLightAvailable,
+                available = viewModel.isAmbientLightAvailable && interactionsEnabled,
                 onCheckedChange = { viewModel.setAmbientLightEnabled(it) }
             )
             
             SensorToggle(
                 label = "Proximity",
                 enabled = proximityEnabled,
-                available = viewModel.isProximityAvailable,
+                available = viewModel.isProximityAvailable && interactionsEnabled,
                 onCheckedChange = { viewModel.setProximityEnabled(it) }
             )
             
@@ -347,7 +419,8 @@ fun MainScreen(
             ) {
                 Button(
                     onClick = { showSaveDialog = true },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    enabled = interactionsEnabled
                 ) {
                     Text("Lưu")
                 }
@@ -355,11 +428,20 @@ fun MainScreen(
                 Button(
                     onClick = { showDeleteDialog = true },
                     modifier = Modifier.weight(1f),
+                    enabled = interactionsEnabled,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
                     )
                 ) {
                     Text("Xóa")
+                }
+
+                OutlinedButton(
+                    onClick = { showFileDeleteDialog = true },
+                    modifier = Modifier.weight(1f),
+                    enabled = interactionsEnabled && recordingFiles.isNotEmpty()
+                ) {
+                    Text("Xóa file lẻ")
                 }
             }
             
@@ -367,7 +449,7 @@ fun MainScreen(
             Button(
                 onClick = { showJsonDialog = true },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = lastRecording != null,
+                enabled = lastRecording != null && interactionsEnabled,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondary
                 )
@@ -389,6 +471,17 @@ fun MainScreen(
             types = viewModel.getTypeDirectories(),
             onDismiss = { showSaveDialog = false },
             onSave = { showSaveDialog = false }
+        )
+    }
+    
+    if (showFileDeleteDialog) {
+        DeleteFilesDialog(
+            files = recordingFiles,
+            onDismiss = { showFileDeleteDialog = false },
+            onConfirm = { selected ->
+                viewModel.deleteSelectedFiles(selected)
+                showFileDeleteDialog = false
+            }
         )
     }
     

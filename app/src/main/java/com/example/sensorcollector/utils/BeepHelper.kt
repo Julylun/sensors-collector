@@ -2,24 +2,45 @@ package com.example.sensorcollector.utils
 
 import android.media.AudioManager
 import android.media.ToneGenerator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 object BeepHelper {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val mutex = Mutex()
     private var toneGenerator: ToneGenerator? = null
-    
-    fun playBeep() {
-        try {
-            if (toneGenerator == null) {
-                toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
+
+    private suspend fun ensureGenerator(): ToneGenerator = mutex.withLock {
+        if (toneGenerator == null) {
+            toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+        }
+        toneGenerator!!
+    }
+
+    fun playBeep(durationMs: Int = 500) {
+        scope.launch {
+            try {
+                val generator = ensureGenerator()
+                generator.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, durationMs)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
-    
+
     fun release() {
-        toneGenerator?.release()
-        toneGenerator = null
+        scope.launch {
+            mutex.withLock {
+                toneGenerator?.release()
+                toneGenerator = null
+            }
+        }
     }
 }
+
+
 
