@@ -70,16 +70,21 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     private val _proximityEnabled = MutableStateFlow(false)
     val proximityEnabled: StateFlow<Boolean> = _proximityEnabled.asStateFlow()
     
+    private val _orientationEnabled = MutableStateFlow(false)
+    val orientationEnabled: StateFlow<Boolean> = _orientationEnabled.asStateFlow()
+    
     private val _recordingFiles = MutableStateFlow<List<RecordingFileInfo>>(emptyList())
     val recordingFiles: StateFlow<List<RecordingFileInfo>> = _recordingFiles.asStateFlow()
     
     val accelerometerValue = sensorManager.accelerometerValue
     val gyroscopeValue = sensorManager.gyroscopeValue
+    val orientationValue = sensorManager.orientationValue
     val ambientLightValue = sensorManager.ambientLightValue
     val proximityValue = sensorManager.proximityValue
     
     val isAccelerometerAvailable = sensorManager.isAccelerometerAvailable()
     val isGyroscopeAvailable = sensorManager.isGyroscopeAvailable()
+    val isOrientationAvailable = sensorManager.isOrientationAvailable()
     val isAmbientLightAvailable = sensorManager.isAmbientLightAvailable()
     val isProximityAvailable = sensorManager.isProximityAvailable()
     
@@ -89,6 +94,7 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
         // Set initial sensor states
         sensorManager.setAccelerometerEnabled(_accelerometerEnabled.value)
         sensorManager.setGyroscopeEnabled(_gyroscopeEnabled.value)
+        sensorManager.setOrientationEnabled(_orientationEnabled.value)
         sensorManager.setAmbientLightEnabled(_ambientLightEnabled.value)
         sensorManager.setProximityEnabled(_proximityEnabled.value)
         
@@ -133,6 +139,11 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     fun setGyroscopeEnabled(enabled: Boolean) {
         _gyroscopeEnabled.value = enabled
         sensorManager.setGyroscopeEnabled(enabled)
+    }
+    
+    fun setOrientationEnabled(enabled: Boolean) {
+        _orientationEnabled.value = enabled
+        sensorManager.setOrientationEnabled(enabled)
     }
     
     fun setAmbientLightEnabled(enabled: Boolean) {

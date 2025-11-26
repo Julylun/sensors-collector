@@ -18,11 +18,13 @@ class SensorManager(private val context: Context) {
     
     private val accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    private val rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
     private val ambientLightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
     private val proximitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
     
     private var accelerometerEnabled = false
     private var gyroscopeEnabled = false
+    private var orientationEnabled = false
     private var ambientLightEnabled = false
     private var proximityEnabled = false
     
@@ -35,6 +37,7 @@ class SensorManager(private val context: Context) {
     // Lưu giá trị cuối cùng của mỗi sensor để dùng khi tạo entry mới
     private var lastAccelerometerValue: AccelerometerValue? = null
     private var lastGyroscopeValue: GyroscopeValue? = null
+    private var lastOrientationValue: OrientationValue? = null
     private var lastAmbientLightValue: Float? = null
     private var lastProximityValue: Float? = null
     
@@ -43,6 +46,9 @@ class SensorManager(private val context: Context) {
     
     private val _gyroscopeValue = MutableStateFlow<Triple<Float, Float, Float>?>(null)
     val gyroscopeValue: StateFlow<Triple<Float, Float, Float>?> = _gyroscopeValue.asStateFlow()
+    
+    private val _orientationValue = MutableStateFlow<OrientationValue?>(null)
+    val orientationValue: StateFlow<OrientationValue?> = _orientationValue.asStateFlow()
     
     private val _ambientLightValue = MutableStateFlow<Float?>(null)
     val ambientLightValue: StateFlow<Float?> = _ambientLightValue.asStateFlow()
@@ -86,6 +92,20 @@ class SensorManager(private val context: Context) {
                             val lastIndex = sensorReadings.size - 1
                             val existing = sensorReadings[lastIndex]
                             sensorReadings[lastIndex] = existing.copy(gyroscope = value)
+                        }
+                    }
+                }
+                Sensor.TYPE_ROTATION_VECTOR -> {
+                    if (orientationEnabled) {
+                        val orientation = computeOrientation(event.values)
+                        lastOrientationValue = orientation
+                        if (!isRecording) {
+                            _orientationValue.value = orientation
+                        }
+                        if (isRecording && sensorReadings.isNotEmpty()) {
+                            val lastIndex = sensorReadings.size - 1
+                            val existing = sensorReadings[lastIndex]
+                            sensorReadings[lastIndex] = existing.copy(orientation = orientation)
                         }
                     }
                 }
@@ -174,6 +194,7 @@ class SensorManager(private val context: Context) {
     
     fun isAccelerometerAvailable(): Boolean = accelerometerSensor != null
     fun isGyroscopeAvailable(): Boolean = gyroscopeSensor != null
+    fun isOrientationAvailable(): Boolean = rotationVectorSensor != null
     fun isAmbientLightAvailable(): Boolean = ambientLightSensor != null
     fun isProximityAvailable(): Boolean = proximitySensor != null
     
@@ -207,6 +228,23 @@ class SensorManager(private val context: Context) {
                 sensorManager.unregisterListener(sensorEventListener, gyroscopeSensor)
                 _gyroscopeValue.value = null
                 lastGyroscopeValue = null
+            }
+        }
+    }
+    
+    fun setOrientationEnabled(enabled: Boolean) {
+        orientationEnabled = enabled && isOrientationAvailable()
+        if (rotationVectorSensor != null) {
+            if (orientationEnabled) {
+                sensorManager.registerListener(
+                    sensorEventListener,
+                    rotationVectorSensor,
+                    AndroidSensorManager.SENSOR_DELAY_GAME
+                )
+            } else {
+                sensorManager.unregisterListener(sensorEventListener, rotationVectorSensor)
+                _orientationValue.value = null
+                lastOrientationValue = null
             }
         }
     }
@@ -259,6 +297,7 @@ class SensorManager(private val context: Context) {
                 timestamp = initialTimestamp,
                 accelerometer = if (isAccelerometerAvailable() && accelerometerEnabled) lastAccelerometerValue else null,
                 gyroscope = if (isGyroscopeAvailable() && gyroscopeEnabled) lastGyroscopeValue else null,
+                orientation = if (isOrientationAvailable() && orientationEnabled) lastOrientationValue else null,
                 ambientLight = if (isAmbientLightAvailable() && ambientLightEnabled) lastAmbientLightValue else null,
                 proximity = if (isProximityAvailable() && proximityEnabled) lastProximityValue else null
             )
@@ -271,6 +310,7 @@ class SensorManager(private val context: Context) {
                 timestamp = initialTimestamp,
                 accelerometer = if (isAccelerometerAvailable() && accelerometerEnabled) lastAccelerometerValue else null,
                 gyroscope = if (isGyroscopeAvailable() && gyroscopeEnabled) lastGyroscopeValue else null,
+                orientation = if (isOrientationAvailable() && orientationEnabled) lastOrientationValue else null,
                 ambientLight = if (isAmbientLightAvailable() && ambientLightEnabled) lastAmbientLightValue else null,
                 proximity = if (isProximityAvailable() && proximityEnabled) lastProximityValue else null
             )
@@ -298,6 +338,7 @@ class SensorManager(private val context: Context) {
                 timestamp = timestamp,
                 accelerometer = if (isAccelerometerAvailable() && accelerometerEnabled) lastAccelerometerValue else null,
                 gyroscope = if (isGyroscopeAvailable() && gyroscopeEnabled) lastGyroscopeValue else null,
+                orientation = if (isOrientationAvailable() && orientationEnabled) lastOrientationValue else null,
                 ambientLight = if (isAmbientLightAvailable() && ambientLightEnabled) lastAmbientLightValue else null,
                 proximity = if (isProximityAvailable() && proximityEnabled) lastProximityValue else null
             )
@@ -334,6 +375,7 @@ class SensorManager(private val context: Context) {
         val readings = mutableListOf<SensorReading>()
         var prevAccelerometer: AccelerometerValue? = null
         var prevGyroscope: GyroscopeValue? = null
+        var prevOrientation: OrientationValue? = null
         var prevAmbientLight: Float? = null
         var prevProximity: Float? = null
         
@@ -347,6 +389,9 @@ class SensorManager(private val context: Context) {
                 gyroscope = if (isGyroscopeAvailable() && gyroscopeEnabled) {
                     reading.gyroscope ?: prevGyroscope
                 } else null,
+                orientation = if (isOrientationAvailable() && orientationEnabled) {
+                    reading.orientation ?: prevOrientation
+                } else null,
                 ambientLight = if (isAmbientLightAvailable() && ambientLightEnabled) {
                     reading.ambientLight ?: prevAmbientLight
                 } else null,
@@ -358,6 +403,7 @@ class SensorManager(private val context: Context) {
             // Cập nhật giá trị trước đó nếu có data mới
             if (reading.accelerometer != null) prevAccelerometer = reading.accelerometer
             if (reading.gyroscope != null) prevGyroscope = reading.gyroscope
+            if (reading.orientation != null) prevOrientation = reading.orientation
             if (reading.ambientLight != null) prevAmbientLight = reading.ambientLight
             if (reading.proximity != null) prevProximity = reading.proximity
             
@@ -373,5 +419,26 @@ class SensorManager(private val context: Context) {
     
     fun clearData() {
         sensorReadings.clear()
+    }
+
+    private fun computeOrientation(values: FloatArray): OrientationValue {
+        val rotationMatrix = FloatArray(9)
+        AndroidSensorManager.getRotationMatrixFromVector(rotationMatrix, values)
+        val orientationAngles = FloatArray(3)
+        AndroidSensorManager.getOrientation(rotationMatrix, orientationAngles)
+        val azimuth = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
+        val pitch = Math.toDegrees(orientationAngles[1].toDouble()).toFloat()
+        val roll = Math.toDegrees(orientationAngles[2].toDouble()).toFloat()
+        return OrientationValue(
+            azimuth = normalizeAzimuth(azimuth),
+            pitch = pitch,
+            roll = roll
+        )
+    }
+
+    private fun normalizeAzimuth(value: Float): Float {
+        var az = value % 360f
+        if (az < 0f) az += 360f
+        return az
     }
 }

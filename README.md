@@ -10,9 +10,10 @@
 
 ## Tính năng
 
-- Thu thập dữ liệu từ 4 cảm biến:
+- Thu thập dữ liệu từ 5 cảm biến:
   - Accelerometer
   - Gyroscope
+  - Orientation (azimuth/pitch/roll qua Rotation Vector)
   - Ambient Light Sensor
   - Proximity Sensor
 
@@ -81,4 +82,10 @@ sensor-collector-app/
 - Dữ liệu được lưu trong thư mục `app_data/sensor_data/{type}/`
 - Tên file: `sensors_phút-giờ_ngày-tháng-năm-n.json`
 - Các cảm biến không khả dụng hoặc bị tắt sẽ có giá trị `null` trong JSON
+
+## Orientation sensor notes
+
+- Orientation được tính từ `Sensor.TYPE_ROTATION_VECTOR` và hiển thị thành azimuth/pitch/roll (đơn vị độ).
+- Cần bật toggle "Orientation" trong UI để đăng ký cảm biến này (nút sẽ bị vô hiệu nếu thiết bị không hỗ trợ).
+- Mỗi mẫu JSON chứa trường `orientation` với `{ "azimuth": ..., "pitch": ..., "roll": ... }` hoặc `null` nếu không khả dụng.
 

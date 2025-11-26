@@ -12,10 +12,17 @@ data class GyroscopeValue(
     val z: Float
 )
 
+data class OrientationValue(
+    val azimuth: Float,
+    val pitch: Float,
+    val roll: Float
+)
+
 data class SensorReading(
     val timestamp: Long,
     val accelerometer: AccelerometerValue? = null,
     val gyroscope: GyroscopeValue? = null,
+    val orientation: OrientationValue? = null,
     val ambientLight: Float? = null,
     val proximity: Float? = null
 )

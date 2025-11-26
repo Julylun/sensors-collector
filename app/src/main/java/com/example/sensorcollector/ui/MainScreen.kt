@@ -38,9 +38,11 @@ fun MainScreen(
     val gyroscopeEnabled by viewModel.gyroscopeEnabled.collectAsState()
     val ambientLightEnabled by viewModel.ambientLightEnabled.collectAsState()
     val proximityEnabled by viewModel.proximityEnabled.collectAsState()
+    val orientationEnabled by viewModel.orientationEnabled.collectAsState()
     
     val accelerometerValue by viewModel.accelerometerValue.collectAsState()
     val gyroscopeValue by viewModel.gyroscopeValue.collectAsState()
+    val orientationValue by viewModel.orientationValue.collectAsState()
     val ambientLightValue by viewModel.ambientLightValue.collectAsState()
     val proximityValue by viewModel.proximityValue.collectAsState()
     
@@ -355,6 +357,13 @@ fun MainScreen(
                 available = viewModel.isGyroscopeAvailable && interactionsEnabled,
                 onCheckedChange = { viewModel.setGyroscopeEnabled(it) }
             )
+
+            SensorToggle(
+                label = "Orientation (Az/Pitch/Roll)",
+                enabled = orientationEnabled,
+                available = viewModel.isOrientationAvailable && interactionsEnabled,
+                onCheckedChange = { viewModel.setOrientationEnabled(it) }
+            )
             
             SensorToggle(
                 label = "Ambient Light",
@@ -393,6 +402,14 @@ fun MainScreen(
                 label = "Gyroscope",
                 value = gyroText
             )
+
+            val orientationText = orientationValue?.let {
+                "Az: ${String.format("%.1f deg", it.azimuth)}, Pitch: ${String.format("%.1f deg", it.pitch)}, Roll: ${String.format("%.1f deg", it.roll)}"
+            }
+            SensorDisplay(
+                label = "Orientation",
+                value = orientationText
+            )
             
             val lightText = ambientLightValue?.let { 
                 String.format("%.2f", it)
@@ -409,7 +426,6 @@ fun MainScreen(
                 label = "Proximity",
                 value = proxText
             )
-            
             Divider()
             
             // Save, Delete, and View JSON Buttons
